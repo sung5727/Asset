@@ -1,0 +1,2546 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>캘린더 가계부</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    :root {
+      --bg: #f4f1ea;
+      --card: #fbfaf7;
+      --text: #1f2933;
+      --muted: #777b82;
+      --line: #e3ded5;
+      --soft: #eeeae2;
+      --danger: #b4534a;
+      --accent: #5f6f8f;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      min-height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    button, input, select {
+      font-family: inherit;
+    }
+
+    .app {
+      width: 100%;
+      max-width: 480px;
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 14px;
+      padding-bottom: 96px;
+      background: var(--bg);
+    }
+
+    .top-bar {
+      display: grid;
+      grid-template-columns: 40px 1fr 40px;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .month-title {
+      text-align: center;
+      font-size: 22px;
+      line-height: 1.2;
+      font-weight: 850;
+      letter-spacing: -0.4px;
+    }
+
+    .nav-btn {
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--card);
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .summary-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      width: 100%;
+      margin-bottom: 14px;
+      padding: 15px 16px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--card);
+      box-shadow: 0 1px 4px rgba(31, 41, 51, 0.05);
+    }
+
+    .summary-label {
+      font-size: 14px;
+      font-weight: 800;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .summary-value {
+      flex: 1;
+      text-align: right;
+      font-size: 22px;
+      font-weight: 900;
+      color: var(--danger);
+      white-space: nowrap;
+    }
+
+    .calendar-wrap {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--card);
+      box-shadow: 0 1px 4px rgba(31, 41, 51, 0.05);
+      overflow: hidden;
+      touch-action: pan-y;
+    }
+
+    .weekdays,
+    .calendar {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+    }
+
+    .weekday {
+      padding: 6px 0 9px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--muted);
+    }
+
+    .day {
+      height: 62px;
+      min-height: 62px;
+      max-height: 62px;
+      padding: 4px;
+      border: 1px solid #e8e2d9;
+      background: var(--card);
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .day.empty {
+      background: #f1eee7;
+      cursor: default;
+    }
+
+    .day.selected {
+      outline: 1px solid #7c817a;
+      outline-offset: -1px;
+      border-radius: 6px;
+    }
+
+    .day.today .date-num {
+      border: 2px solid #111827;
+      background: #111827;
+      color: #ffffff !important;
+      border-radius: 999px;
+      width: 22px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .day.today.today-sat .date-num {
+      border-color: #2563eb;
+      background: #2563eb;
+      color: #ffffff !important;
+    }
+
+    .day.today.today-sun .date-num {
+      border-color: #dc2626;
+      background: #dc2626;
+      color: #ffffff !important;
+    }
+
+    .date-num {
+      display: block;
+      margin-bottom: 3px;
+      font-size: var(--calendar-date-size, 14px);
+      line-height: 1;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .calendar .day:nth-child(7n + 1) .date-num { color: #a15c55; }
+    .calendar .day:nth-child(7n) .date-num { color: var(--accent); }
+
+    .day.holiday .date-num {
+      color: #a15c55;
+    }
+
+    .day.today.holiday .date-num {
+      border-color: #a15c55;
+      background: #a15c55;
+      color: #ffffff !important;
+    }
+
+    .day-item,
+    .holiday-name {
+      display: block;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 9px;
+      line-height: 1.15;
+      font-weight: 850;
+      letter-spacing: -0.4px;
+    }
+
+    .day-item {
+      color: var(--calendar-amount-color, var(--danger));
+      font-size: var(--calendar-amount-size, 10px);
+      line-height: 1.15;
+    }
+
+    .holiday-name {
+      margin-bottom: 1px;
+      color: #a15c55;
+      font-size: var(--calendar-holiday-size, 7px);
+      line-height: 1.05;
+      font-weight: 850;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 12px;
+      background: rgba(31, 41, 51, 0.34);
+    }
+
+    .modal-overlay.hidden { display: none; }
+
+    .modal-box {
+      width: 100%;
+      max-width: 480px;
+      max-height: 88vh;
+      overflow-y: auto;
+      padding: 16px;
+      border-radius: 20px;
+      background: var(--card);
+      box-shadow: 0 10px 28px rgba(31, 41, 51, 0.16);
+    }
+
+    .panel-title {
+      margin-bottom: 13px;
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    .detail-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 13px;
+    }
+
+    .detail-head .panel-title {
+      margin-bottom: 0;
+    }
+
+    .detail-add-btn {
+      border: none;
+      border-radius: 10px;
+      background: #3f4650;
+      color: #fff;
+      padding: 8px 11px;
+      font-size: 13px;
+      font-weight: 900;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .form-row { margin-bottom: 10px; }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 12px;
+      font-weight: 750;
+      color: var(--muted);
+    }
+
+    input,
+    select {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid #d4d0c8;
+      border-radius: 12px;
+      background: #fffefb;
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+    }
+
+    .save-btn,
+    .cancel-btn,
+    .tab-btn,
+    .delete-btn {
+      border: none;
+      cursor: pointer;
+    }
+
+    .save-btn,
+    .cancel-btn {
+      width: 100%;
+      padding: 13px;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .save-btn {
+      background: #3f4650;
+      color: #fff;
+    }
+
+    .cancel-btn {
+      margin-top: 8px;
+      background: var(--soft);
+      color: var(--text);
+    }
+
+    .exit-actions {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .exit-actions .cancel-btn,
+    .exit-actions .save-btn {
+      margin-top: 0;
+    }
+
+    .list { margin-top: 12px; }
+
+    .entry {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto auto;
+      column-gap: 6px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #e6e1d8;
+    }
+
+    .entry-main { min-width: 0; }
+
+    .entry-title {
+      position: relative;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 14px;
+      font-weight: 850;
+      cursor: pointer;
+    }
+
+    .entry-title:active {
+      opacity: 0.72;
+    }
+
+    .bubble-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      background: transparent;
+    }
+
+    .bubble-overlay.hidden {
+      display: none;
+    }
+
+    .text-bubble {
+      position: absolute;
+      display: inline-block;
+      width: max-content;
+      min-width: 42px;
+      max-width: calc(100vw - 32px);
+      padding: 11px 13px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fffefb;
+      color: var(--text);
+      box-shadow: 0 8px 22px rgba(31, 41, 51, 0.18);
+      font-size: 14px;
+      line-height: 1.45;
+      font-weight: 750;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .text-bubble::after {
+      content: "";
+      position: absolute;
+      left: var(--arrow-left, 28px);
+      bottom: -9px;
+      width: 16px;
+      height: 16px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      background: #fffefb;
+      transform: rotate(45deg);
+    }
+
+    .text-bubble.below::after {
+      top: -9px;
+      bottom: auto;
+      border-right: none;
+      border-bottom: none;
+      border-left: 1px solid var(--line);
+      border-top: 1px solid var(--line);
+    }
+
+    .entry-category {
+      margin-top: 3px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .entry-amount {
+      margin-right: 8px;
+      white-space: nowrap;
+      font-size: 14px;
+      font-weight: 900;
+      color: var(--text);
+    }
+
+    .delete-btn {
+      padding: 7px 8px;
+      border-radius: 10px;
+      background: var(--soft);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .category-add-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .category-add-btn {
+      height: 43px;
+      padding: 0 14px;
+      border: none;
+      border-radius: 12px;
+      background: #3f4650;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 900;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .category-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 6px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #e6e1d8;
+      touch-action: none;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, opacity 0.16s ease;
+    }
+
+    .category-row.dragging {
+      position: relative;
+      z-index: 5;
+      opacity: 0.22;
+      transform: scale(0.98);
+      padding-left: 10px;
+      padding-right: 10px;
+      border-radius: 14px;
+      background: #f7f3eb;
+      box-shadow: 0 4px 12px rgba(31, 41, 51, 0.08);
+    }
+
+    .category-row.drop-target {
+      transform: translateY(2px);
+      background: #f7f3eb;
+      border-radius: 14px;
+      padding-left: 10px;
+      padding-right: 10px;
+    }
+
+    .category-drag-ghost {
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 999;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 10px;
+      border-radius: 14px;
+      background: #fffefb;
+      box-shadow: 0 14px 30px rgba(31, 41, 51, 0.22);
+      pointer-events: none;
+      opacity: 0.96;
+      transform: translate3d(0, 0, 0) scale(1.03);
+    }
+
+    .category-name {
+      cursor: grab;
+      user-select: none;
+    }
+
+    .category-row.dragging .category-name {
+      cursor: grabbing;
+    }
+
+    .category-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 14px;
+      font-weight: 850;
+    }
+
+    .setting-row {
+      margin-bottom: 14px;
+    }
+
+    .setting-value-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .setting-current-value {
+      font-size: 13px;
+      font-weight: 900;
+      color: var(--danger);
+      white-space: nowrap;
+    }
+
+    label.amount-color-target {
+      font-size: 12px;
+    }
+
+
+    .range-input {
+      width: 100%;
+      padding: 0;
+      accent-color: #3f4650;
+    }
+
+    .color-palette {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .color-swatch {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      min-height: 34px;
+      border: 2px solid transparent;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: inset 0 0 0 1px rgba(31, 41, 51, 0.12);
+      overflow: hidden;
+    }
+
+    .color-swatch.active {
+      border-color: transparent;
+    }
+
+    .color-swatch.active::after {
+      content: "✓";
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 950;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    }
+
+    .gear-btn {
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: var(--summary-content-size, 13px);
+    }
+
+    .summary-table th,
+    .summary-table td {
+      padding: 9px 4px;
+      border-bottom: 1px solid #e6e1d8;
+      text-align: left;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+
+    .summary-table th {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .summary-item {
+      max-width: 110px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .summary-item:active {
+      opacity: 0.72;
+    }
+
+    .summary-amount {
+      text-align: right;
+      font-weight: 550;
+    }
+
+    .small-note {
+      padding: 12px 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .category-guide-note {
+      padding: 0 0 10px;
+      margin-top: -6px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .bottom-tabs {
+      position: fixed;
+      left: 50%;
+      bottom: 0;
+      z-index: 30;
+      transform: translateX(-50%);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      width: 100%;
+      max-width: 480px;
+      padding: 10px 16px 14px;
+      border-top: 1px solid var(--line);
+      background: rgba(251, 250, 247, 0.94);
+      backdrop-filter: blur(10px);
+    }
+
+    .tab-btn {
+      width: 100%;
+      padding: 12px 6px;
+      border-radius: 14px;
+      background: var(--soft);
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .tab-btn.active {
+      background: #3f4650;
+      color: #fff;
+    }
+
+    .hidden { display: none; }
+
+    @media (max-width: 380px) {
+      .app { padding: 12px; padding-bottom: 104px; }
+      .day { height: 58px; min-height: 58px; max-height: 58px; padding: 3px; }
+      .day-item { font-size: 8px; }
+      .summary-value { font-size: 19px; }
+      .tab-btn { font-size: 14px; }
+      .category-add-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .category-add-btn {
+      height: 43px;
+      padding: 0 14px;
+      border: none;
+      border-radius: 12px;
+      background: #3f4650;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 900;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .category-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 6px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #e6e1d8;
+      touch-action: none;
+      transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, opacity 0.16s ease;
+    }
+
+    .category-row.dragging {
+      position: relative;
+      z-index: 5;
+      opacity: 0.22;
+      transform: scale(0.98);
+      padding-left: 10px;
+      padding-right: 10px;
+      border-radius: 14px;
+      background: #f7f3eb;
+      box-shadow: 0 4px 12px rgba(31, 41, 51, 0.08);
+    }
+
+    .category-row.drop-target {
+      transform: translateY(2px);
+      background: #f7f3eb;
+      border-radius: 14px;
+      padding-left: 10px;
+      padding-right: 10px;
+    }
+
+    .category-drag-ghost {
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 999;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 10px;
+      border-radius: 14px;
+      background: #fffefb;
+      box-shadow: 0 14px 30px rgba(31, 41, 51, 0.22);
+      pointer-events: none;
+      opacity: 0.96;
+      transform: translate3d(0, 0, 0) scale(1.03);
+    }
+
+    .category-name {
+      cursor: grab;
+      user-select: none;
+    }
+
+    .category-row.dragging .category-name {
+      cursor: grabbing;
+    }
+
+    .category-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 14px;
+      font-weight: 850;
+    }
+
+    .setting-row {
+      margin-bottom: 14px;
+    }
+
+    .setting-value-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .setting-current-value {
+      font-size: 13px;
+      font-weight: 900;
+      color: var(--danger);
+      white-space: nowrap;
+    }
+
+    label.amount-color-target {
+      font-size: 12px;
+    }
+
+
+    .range-input {
+      width: 100%;
+      padding: 0;
+      accent-color: #3f4650;
+    }
+
+    .color-palette {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .color-swatch {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      min-height: 34px;
+      border: 2px solid transparent;
+      border-radius: 10px;
+      cursor: pointer;
+      box-shadow: inset 0 0 0 1px rgba(31, 41, 51, 0.12);
+      overflow: hidden;
+    }
+
+    .color-swatch.active {
+      border-color: transparent;
+    }
+
+    .color-swatch.active::after {
+      content: "✓";
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      font-size: 18px;
+      font-weight: 950;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    }
+
+    .gear-btn {
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .summary-table { font-size: 12px; }
+      .summary-item { max-width: 82px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="top-bar">
+      <button class="nav-btn" type="button" onclick="moveMonth(-1)">‹</button>
+      <div class="month-title" id="monthTitle"></div>
+      <button class="nav-btn" type="button" onclick="moveMonth(1)">›</button>
+    </div>
+
+    <div class="summary-card">
+      <div class="summary-label">이번 달 지출</div>
+      <div class="summary-value" id="expenseTotal">0원</div>
+    </div>
+
+    <div class="calendar-wrap" id="calendarWrap">
+      <div class="weekdays">
+        <div class="weekday">일</div>
+        <div class="weekday">월</div>
+        <div class="weekday">화</div>
+        <div class="weekday">수</div>
+        <div class="weekday">목</div>
+        <div class="weekday">금</div>
+        <div class="weekday">토</div>
+      </div>
+      <div class="calendar" id="calendar"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="inputModal" onclick="closeInputModal()">
+    <section class="modal-box" onclick="event.stopPropagation()">
+      <div class="panel-title" id="inputModalTitle">입력</div>
+      <div class="form-row">
+        <label for="dateInput">날짜</label>
+        <input id="dateInput" type="date" />
+      </div>
+      <div class="form-row">
+        <label for="categoryInput">분류</label>
+        <select id="categoryInput"></select>
+      </div>
+      <div class="form-row">
+        <label for="amountInput">금액</label>
+        <input id="amountInput" type="text" inputmode="numeric" placeholder="예: 12000" oninput="formatAmountInput(this)" />
+      </div>
+      <div class="form-row">
+        <label for="titleInput">항목</label>
+        <input id="titleInput" type="text" placeholder="선택 입력" />
+      </div>
+      <button class="save-btn" id="saveEntryBtn" type="button" onclick="saveEntry()">저장하기</button>
+      <button class="cancel-btn" type="button" onclick="closeInputModal()">닫기</button>
+    </section>
+  </div>
+
+  <div class="modal-overlay hidden" id="detailModal" onclick="closeDetailModal()">
+    <section class="modal-box" onclick="event.stopPropagation()">
+      <div class="detail-head">
+        <div class="panel-title" id="detailDateTitle">내역</div>
+        <button class="detail-add-btn" type="button" onclick="openInputFromDetail()">입력</button>
+      </div>
+      <div class="list" id="dailyList"></div>
+      <button class="cancel-btn" type="button" onclick="closeDetailModal()">닫기</button>
+    </section>
+  </div>
+
+  <div class="modal-overlay hidden" id="categoryModal" onclick="closeCategoryModal()">
+    <section class="modal-box" onclick="event.stopPropagation()">
+      <div class="panel-title">분류 관리</div>
+      <div class="category-guide-note">원하시는 위치로 드래그를 이용하여 변경 가능</div>
+      <div class="category-add-row">
+        <input id="newCategoryInput" type="text" placeholder="예: 교통비" />
+        <button class="category-add-btn" type="button" onclick="addCategory()">추가</button>
+      </div>
+      <div id="categoryList"></div>
+      <button class="cancel-btn" type="button" onclick="closeCategoryModal()">닫기</button>
+    </section>
+  </div>
+
+  <div class="modal-overlay hidden" id="summaryModal" onclick="closeSummaryModal()">
+    <section class="modal-box" onclick="event.stopPropagation()">
+      <div class="panel-title" id="summaryModalTitle">월별 요약</div>
+      <div class="form-row">
+        <select id="summaryCategoryFilter" onchange="renderSummaryList()">
+          <option value="all">전체</option>
+        </select>
+      </div>
+      <div id="summaryList"></div>
+      <button class="cancel-btn" type="button" onclick="closeSummaryModal()">닫기</button>
+    </section>
+  </div>
+
+  <div class="modal-overlay hidden" id="categoryEditModal" onclick="closeCategoryEditModal()">
+    <section class="modal-box" onclick="event.stopPropagation()">
+      <div class="panel-title">분류 이름 수정</div>
+      <div class="form-row">
+        <label for="editCategoryInput">분류명</label>
+        <input id="editCategoryInput" type="text" placeholder="분류명을 입력해줘" />
+      </div>
+      <button class="save-btn" type="button" onclick="saveEditedCategory()">수정 저장</button>
+      <button class="cancel-btn" type="button" onclick="closeCategoryEditModal()">닫기</button>
+    </section>
+  </div>
+
+  <div class="modal-overlay hidden" id="deleteModal" onclick="closeDeleteModal()">
+    <section class="modal-box" onclick="event.stopPropagation()">
+      <div class="panel-title">정말로 삭제하시겠습니까?</div>
+      <div class="exit-actions">
+        <button class="cancel-btn" type="button" onclick="closeDeleteModal()">취소</button>
+        <button class="save-btn" type="button" onclick="confirmDeleteEntry()">삭제</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-overlay hidden" id="exitModal" onclick="closeExitModal()">
+    <section class="modal-box" onclick="event.stopPropagation()">
+      <div class="panel-title">종료하시겠습니까?</div>
+      <div class="small-note">종료하면 현재 화면을 닫고 이전 화면으로 이동합니다.</div>
+      <div class="exit-actions">
+        <button class="cancel-btn" type="button" onclick="closeExitModal()">취소</button>
+        <button class="save-btn" type="button" onclick="confirmExit()">종료</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="modal-overlay hidden" id="settingsModal" onclick="closeSettingsModal()">
+    <section class="modal-box" onclick="event.stopPropagation()">
+      <div class="panel-title">설정</div>
+
+      <div class="setting-row">
+        <div class="setting-value-row">
+          <label for="dateFontSizeInput">날짜 글자크기</label>
+          <div class="setting-current-value" id="dateFontSizeValue">14px</div>
+        </div>
+        <input class="range-input" id="dateFontSizeInput" type="range" min="10" max="20" step="1" value="14" oninput="changeCalendarDateSize(this.value)" />
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-value-row">
+          <label for="holidayFontSizeInput">공휴일 글자크기</label>
+          <div class="setting-current-value" id="holidayFontSizeValue">7px</div>
+        </div>
+        <input class="range-input" id="holidayFontSizeInput" type="range" min="5" max="12" step="1" value="7" oninput="changeCalendarHolidaySize(this.value)" />
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-value-row">
+          <label for="summaryContentSizeInput">월별요약 내용 글자크기</label>
+          <div class="setting-current-value" id="summaryContentSizeValue">13px</div>
+        </div>
+        <input class="range-input" id="summaryContentSizeInput" type="range" min="10" max="18" step="1" value="13" oninput="changeSummaryContentSize(this.value)" />
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-value-row">
+          <label class="amount-color-target" for="amountFontSizeInput">캘린더 합계 금액 글자크기</label>
+          <div class="setting-current-value" id="amountFontSizeValue">10px</div>
+        </div>
+        <input class="range-input" id="amountFontSizeInput" type="range" min="7" max="15" step="1" value="10" oninput="changeCalendarAmountSize(this.value)" />
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-value-row">
+          <label>합계 금액 색상</label>
+          <div class="setting-current-value" id="amountColorValue">기본</div>
+        </div>
+        <div class="color-palette" id="amountColorPalette"></div>
+      </div>
+
+      <button class="cancel-btn" type="button" onclick="closeSettingsModal()">닫기</button>
+    </section>
+  </div>
+
+  <div class="bubble-overlay hidden" id="textBubbleOverlay" onclick="closeTextBubble()">
+    <div class="text-bubble" id="textBubble" onclick="event.stopPropagation()"></div>
+  </div>
+
+  <div class="bottom-tabs">
+    <button class="tab-btn" id="tabInput" type="button" onclick="openInputModal()">입력</button>
+    <button class="tab-btn" id="tabCategory" type="button" onclick="showCategoryTab()">분류</button>
+    <button class="tab-btn" id="tabSummary" type="button" onclick="showSummaryTab()">요약</button>
+    <button class="tab-btn gear-btn" id="tabSettings" type="button" onclick="showSettingsTab()" aria-label="설정">⚙</button>
+  </div>
+
+  <script>
+    const defaultExpenseCategories = ["식비", "민준", "까페"];
+    let expenseCategories = loadCategories();
+
+    const koreanHolidays = {
+      "2025-01-01": "신정",
+      "2025-01-28": "설날 연휴",
+      "2025-01-29": "설날",
+      "2025-01-30": "설날 연휴",
+      "2025-03-01": "삼일절",
+      "2025-03-03": "삼일절 대체공휴일",
+      "2025-05-05": "어린이날·부처님오신날",
+      "2025-05-06": "대체공휴일",
+      "2025-06-06": "현충일",
+      "2025-08-15": "광복절",
+      "2025-10-03": "개천절",
+      "2025-10-05": "추석 연휴",
+      "2025-10-06": "추석",
+      "2025-10-07": "추석 연휴",
+      "2025-10-08": "추석 대체공휴일",
+      "2025-10-09": "한글날",
+      "2025-12-25": "성탄절",
+
+      "2026-01-01": "신정",
+      "2026-02-16": "설날 연휴",
+      "2026-02-17": "설날",
+      "2026-02-18": "설날 연휴",
+      "2026-03-01": "삼일절",
+      "2026-03-02": "삼일절 대체공휴일",
+      "2026-05-05": "어린이날",
+      "2026-05-24": "부처님오신날",
+      "2026-05-25": "부처님오신날 대체공휴일",
+      "2026-06-06": "현충일",
+      "2026-08-15": "광복절",
+      "2026-08-17": "광복절 대체공휴일",
+      "2026-09-24": "추석 연휴",
+      "2026-09-25": "추석",
+      "2026-09-26": "추석 연휴",
+      "2026-10-03": "개천절",
+      "2026-10-05": "개천절 대체공휴일",
+      "2026-10-09": "한글날",
+      "2026-12-25": "성탄절",
+
+      "2027-01-01": "신정",
+      "2027-02-06": "설날 연휴",
+      "2027-02-07": "설날",
+      "2027-02-08": "설날 연휴",
+      "2027-02-09": "설날 대체공휴일",
+      "2027-03-01": "삼일절",
+      "2027-05-05": "어린이날",
+      "2027-05-13": "부처님오신날",
+      "2027-06-06": "현충일",
+      "2027-06-07": "현충일 대체공휴일",
+      "2027-08-15": "광복절",
+      "2027-08-16": "광복절 대체공휴일",
+      "2027-09-14": "추석 연휴",
+      "2027-09-15": "추석",
+      "2027-09-16": "추석 연휴",
+      "2027-10-03": "개천절",
+      "2027-10-04": "개천절 대체공휴일",
+      "2027-10-09": "한글날",
+      "2027-10-11": "한글날 대체공휴일",
+      "2027-12-25": "성탄절",
+      "2027-12-27": "성탄절 대체공휴일"
+    };
+
+    const holidayApiServiceKey = "f3fe3ff25a8fe96c692eacced03e726ebf3443ee7cdd8e50a1d06a1b0d7ee8cf";
+    const holidayApiUrl = "https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo";
+    const loadedHolidayYears = {};
+    const loadingHolidayYears = {};
+
+    let currentDate = new Date();
+    let selectedDate = new Date();
+    let entries = loadEntries();
+    let calendarDateFontSize = loadCalendarDateFontSize();
+    let calendarHolidayFontSize = loadCalendarHolidayFontSize();
+    let summaryContentFontSize = loadSummaryContentFontSize();
+    let calendarAmountFontSize = loadCalendarAmountFontSize();
+    let calendarAmountColor = loadCalendarAmountColor();
+
+    const amountColorOptions = [
+      { name: "기본", value: "#b4534a" },
+      { name: "빨강", value: "#dc2626" },
+      { name: "주황", value: "#ea580c" },
+      { name: "초록", value: "#16a34a" },
+      { name: "파랑", value: "#2563eb" },
+      { name: "보라", value: "#7c3aed" },
+      { name: "검정", value: "#111827" }
+    ];
+
+    const googleSheetApiUrl = "https://script.google.com/macros/s/AKfycbx7cOH7eR4N4RyXY4x34N6LGTEXHCJFJftgNTX5FLQEokvGS-5LqCR7xw3PsKDeEpu5qA/exec";
+    let isRemoteLoading = false;
+    let isRemoteSaving = false;
+    let remoteSaveTimer = null;
+    let lastSaveTime = 0;
+    let pendingRemoteReload = false;
+
+    let editingId = null;
+    let editingCategoryName = null;
+    let returnToDetailAfterEdit = false;
+    let pendingDeleteId = null;
+    let overlayHistoryActive = false;
+    let allowExit = false;
+
+    function loadEntries() {
+      try {
+        const saved = localStorage.getItem("calendarBudgetEntries");
+        return saved ? JSON.parse(saved) : [];
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function loadCategories() {
+      try {
+        const saved = localStorage.getItem("calendarBudgetCategories");
+        const parsed = saved ? JSON.parse(saved) : null;
+
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map(function(category) {
+            return String(category).trim();
+          }).filter(Boolean);
+        }
+
+        return defaultExpenseCategories.slice();
+      } catch (error) {
+        return defaultExpenseCategories.slice();
+      }
+    }
+
+    function saveCategories() {
+      localStorage.setItem("calendarBudgetCategories", JSON.stringify(expenseCategories));
+      saveAllToGoogleSheet();
+    }
+
+    function loadCalendarDateFontSize() {
+      const saved = Number(localStorage.getItem("calendarDateFontSize"));
+      if (saved >= 10 && saved <= 20) return saved;
+      return 14;
+    }
+
+    function saveCalendarDateFontSize() {
+      localStorage.setItem("calendarDateFontSize", String(calendarDateFontSize));
+    }
+
+    function applyCalendarDateFontSize() {
+      document.documentElement.style.setProperty("--calendar-date-size", calendarDateFontSize + "px");
+
+      const input = document.getElementById("dateFontSizeInput");
+      const value = document.getElementById("dateFontSizeValue");
+
+      if (input) {
+        input.value = calendarDateFontSize;
+      }
+
+      if (value) {
+        value.textContent = calendarDateFontSize + "px";
+      }
+
+      document.querySelectorAll(".calendar .date-num").forEach(function(item) {
+        item.style.fontSize = calendarDateFontSize + "px";
+      });
+    }
+
+    function changeCalendarDateSize(value) {
+      const nextSize = Number(value);
+      if (nextSize < 10 || nextSize > 20) return;
+
+      calendarDateFontSize = nextSize;
+      saveCalendarDateFontSize();
+      applyCalendarDateFontSize();
+    }
+
+    function loadCalendarHolidayFontSize() {
+      const saved = Number(localStorage.getItem("calendarHolidayFontSize"));
+      if (saved >= 5 && saved <= 12) return saved;
+      return 7;
+    }
+
+    function saveCalendarHolidayFontSize() {
+      localStorage.setItem("calendarHolidayFontSize", String(calendarHolidayFontSize));
+    }
+
+    function applyCalendarHolidayFontSize() {
+      document.documentElement.style.setProperty("--calendar-holiday-size", calendarHolidayFontSize + "px");
+
+      const input = document.getElementById("holidayFontSizeInput");
+      const value = document.getElementById("holidayFontSizeValue");
+
+      if (input) {
+        input.value = calendarHolidayFontSize;
+      }
+
+      if (value) {
+        value.textContent = calendarHolidayFontSize + "px";
+      }
+
+      document.querySelectorAll(".calendar .holiday-name").forEach(function(item) {
+        item.style.fontSize = calendarHolidayFontSize + "px";
+      });
+    }
+
+    function changeCalendarHolidaySize(value) {
+      const nextSize = Number(value);
+      if (nextSize < 5 || nextSize > 12) return;
+
+      calendarHolidayFontSize = nextSize;
+      saveCalendarHolidayFontSize();
+      applyCalendarHolidayFontSize();
+    }
+
+    function loadSummaryContentFontSize() {
+      const saved = Number(localStorage.getItem("summaryContentFontSize"));
+      if (saved >= 10 && saved <= 18) return saved;
+      return 13;
+    }
+
+    function saveSummaryContentFontSize() {
+      localStorage.setItem("summaryContentFontSize", String(summaryContentFontSize));
+    }
+
+    function applySummaryContentFontSize() {
+      document.documentElement.style.setProperty("--summary-content-size", summaryContentFontSize + "px");
+
+      const input = document.getElementById("summaryContentSizeInput");
+      const value = document.getElementById("summaryContentSizeValue");
+
+      if (input) {
+        input.value = summaryContentFontSize;
+      }
+
+      if (value) {
+        value.textContent = summaryContentFontSize + "px";
+      }
+
+      document.querySelectorAll(".summary-table").forEach(function(item) {
+        item.style.fontSize = summaryContentFontSize + "px";
+      });
+    }
+
+    function changeSummaryContentSize(value) {
+      const nextSize = Number(value);
+      if (nextSize < 10 || nextSize > 18) return;
+
+      summaryContentFontSize = nextSize;
+      saveSummaryContentFontSize();
+      applySummaryContentFontSize();
+    }
+
+    function loadCalendarAmountFontSize() {
+      const saved = Number(localStorage.getItem("calendarAmountFontSize"));
+      if (saved >= 7 && saved <= 15) return saved;
+      return 10;
+    }
+
+    function saveCalendarAmountFontSize() {
+      localStorage.setItem("calendarAmountFontSize", String(calendarAmountFontSize));
+    }
+
+    function applyCalendarAmountFontSize() {
+      document.documentElement.style.setProperty("--calendar-amount-size", calendarAmountFontSize + "px");
+
+      const input = document.getElementById("amountFontSizeInput");
+      const value = document.getElementById("amountFontSizeValue");
+
+      if (input) {
+        input.value = calendarAmountFontSize;
+      }
+
+      if (value) {
+        value.textContent = calendarAmountFontSize + "px";
+      }
+
+      document.querySelectorAll(".calendar .day-item").forEach(function(item) {
+        item.style.fontSize = calendarAmountFontSize + "px";
+      });
+    }
+
+    function changeCalendarAmountSize(value) {
+      const nextSize = Number(value);
+      if (nextSize < 7 || nextSize > 15) return;
+
+      calendarAmountFontSize = nextSize;
+      saveCalendarAmountFontSize();
+      applyCalendarAmountFontSize();
+    }
+
+    function loadCalendarAmountColor() {
+      const saved = localStorage.getItem("calendarAmountColor");
+      return saved || "#b4534a";
+    }
+
+    function saveCalendarAmountColor() {
+      localStorage.setItem("calendarAmountColor", calendarAmountColor);
+    }
+
+    function getAmountColorName(color) {
+      const target = amountColorOptions.find(function(option) {
+        return option.value === color;
+      });
+      return target ? target.name : "선택";
+    }
+
+    function applyCalendarAmountColor() {
+      document.documentElement.style.setProperty("--calendar-amount-color", calendarAmountColor);
+
+      const value = document.getElementById("amountColorValue");
+      if (value) {
+        value.textContent = getAmountColorName(calendarAmountColor);
+      }
+
+      renderAmountColorPalette();
+
+      document.querySelectorAll(".calendar .day-item, .amount-color-target").forEach(function(item) {
+        item.style.color = calendarAmountColor;
+      });
+    }
+
+    function changeCalendarAmountColor(color) {
+      calendarAmountColor = color;
+      saveCalendarAmountColor();
+      applyCalendarAmountColor();
+    }
+
+    function renderAmountColorPalette() {
+      const palette = document.getElementById("amountColorPalette");
+      if (!palette) return;
+
+      palette.innerHTML = amountColorOptions.map(function(option) {
+        const activeClass = option.value === calendarAmountColor ? " active" : "";
+        return '<button class="color-swatch' + activeClass + '" type="button" style="background:' + escapeHtml(option.value) + ';" title="' + escapeHtml(option.name) + '" onclick="changeCalendarAmountColor(\'' + escapeJs(option.value) + '\')"></button>';
+      }).join("");
+    }
+
+    function saveData() {
+      localStorage.setItem("calendarBudgetEntries", JSON.stringify(entries));
+      saveAllToGoogleSheet();
+    }
+
+    function saveAllToGoogleSheet() {
+      if (isRemoteLoading) return;
+
+      clearTimeout(remoteSaveTimer);
+
+      remoteSaveTimer = setTimeout(function() {
+        isRemoteSaving = true;
+        lastSaveTime = Date.now();
+
+        fetch(googleSheetApiUrl, {
+          method: "POST",
+          mode: "no-cors",
+          headers: {
+            "Content-Type": "text/plain;charset=utf-8"
+          },
+          body: JSON.stringify({
+            action: "saveAll",
+            entries: entries,
+            categories: expenseCategories,
+            syncTime: Date.now()
+          })
+        });
+
+        setTimeout(function() {
+          isRemoteSaving = false;
+          loadAllFromGoogleSheet(true);
+        }, 1500);
+      }, 200);
+    }
+
+    function normalizeRemoteDateValue(value) {
+      if (value === null || value === undefined || value === "") {
+        return "";
+      }
+
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+
+        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+          return trimmed;
+        }
+
+        if (/^\d{8}$/.test(trimmed)) {
+          return trimmed.slice(0, 4) + "-" + trimmed.slice(4, 6) + "-" + trimmed.slice(6, 8);
+        }
+
+        const dateMatch = trimmed.match(/^(\d{4})[.\/-](\d{1,2})[.\/-](\d{1,2})/);
+        if (dateMatch) {
+          return dateMatch[1] + "-" + String(dateMatch[2]).padStart(2, "0") + "-" + String(dateMatch[3]).padStart(2, "0");
+        }
+
+        const parsed = new Date(trimmed);
+        if (!isNaN(parsed.getTime())) {
+          return dateKey(parsed);
+        }
+
+        return "";
+      }
+
+      if (typeof value === "number") {
+        const base = new Date(Date.UTC(1899, 11, 30));
+        const converted = new Date(base.getTime() + value * 24 * 60 * 60 * 1000);
+        if (!isNaN(converted.getTime())) {
+          return dateKey(converted);
+        }
+      }
+
+      const parsed = new Date(value);
+      if (!isNaN(parsed.getTime())) {
+        return dateKey(parsed);
+      }
+
+      return "";
+    }
+
+    function refreshOpenViewsAfterSync() {
+      let autoSyncInterval = null;
+
+    function setupAutoSync() {
+      if (autoSyncInterval) {
+        clearInterval(autoSyncInterval);
+      }
+
+      autoSyncInterval = setInterval(function() {
+        if (!isRemoteLoading && !isRemoteSaving) {
+          loadAllFromGoogleSheet(true);
+        }
+      }, 5000);
+    }
+
+    renderCategoryOptions();
+      renderCalendar();
+
+      if (!document.getElementById("detailModal").classList.contains("hidden")) {
+        renderDailyList();
+      }
+
+      if (!document.getElementById("summaryModal").classList.contains("hidden")) {
+        renderSummaryCategoryFilter();
+        renderSummaryList();
+
+        const summaryTitle = document.getElementById("summaryModalTitle");
+        if (summaryTitle) {
+          summaryTitle.textContent = "월별 요약 (" + (currentDate.getMonth() + 1) + "월)";
+        }
+      }
+
+      if (!document.getElementById("categoryModal").classList.contains("hidden")) {
+        renderCategoryList();
+      }
+    }
+
+    function loadAllFromGoogleSheet(force) {
+      if (!force && isRemoteSaving) {
+        return;
+      }
+
+      if (isRemoteLoading) {
+        return;
+      }
+
+      isRemoteLoading = true;
+
+      const callbackName = "calendarBudgetSyncCallback_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
+      const script = document.createElement("script");
+
+      window[callbackName] = function(data) {
+        try {
+          const remoteEntries = Array.isArray(data.entries) ? data.entries : [];
+          const remoteCategories = Array.isArray(data.categories) ? data.categories : [];
+
+          entries = remoteEntries.map(function(entry) {
+            return {
+              id: Number(entry.id) || Date.now() + Math.floor(Math.random() * 100000),
+              date: normalizeRemoteDateValue(entry.date),
+              category: String(entry.category || ""),
+              title: String(entry.title || ""),
+              amount: Number(entry.amount) || 0,
+              type: entry.type || "expense"
+            };
+          }).filter(function(entry) {
+            return entry.date;
+          });
+
+          expenseCategories = remoteCategories.map(function(category) {
+            return String(category).trim();
+          }).filter(Boolean);
+
+          if (expenseCategories.length === 0) {
+            expenseCategories = defaultExpenseCategories.slice();
+          }
+
+          localStorage.setItem("calendarBudgetEntries", JSON.stringify(entries));
+          localStorage.setItem("calendarBudgetCategories", JSON.stringify(expenseCategories));
+
+          refreshOpenViewsAfterSync();
+        } finally {
+          isRemoteLoading = false;
+
+          if (script.parentNode) {
+            script.parentNode.removeChild(script);
+          }
+
+          try {
+            delete window[callbackName];
+          } catch (error) {
+            window[callbackName] = undefined;
+          }
+        }
+      };
+
+      script.onerror = function() {
+        isRemoteLoading = false;
+
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
+
+        try {
+          delete window[callbackName];
+        } catch (error) {
+          window[callbackName] = undefined;
+        }
+      };
+
+      script.src = googleSheetApiUrl + "?mode=all&callback=" + encodeURIComponent(callbackName) + "&t=" + Date.now();
+      document.body.appendChild(script);
+    }
+
+    function getCurrentMonthEntries() {
+      const monthKey = getMonthKey(currentDate);
+      return entries.filter(function(entry) {
+        return typeof entry.date === "string" && entry.date.indexOf(monthKey) === 0;
+      });
+    }
+
+    function renderCalendar() {
+      const year = currentDate.getFullYear();
+
+      if (!loadedHolidayYears[year] && !loadingHolidayYears[year]) {
+        loadKoreanHolidays(year).then(function() {
+          renderCalendar();
+        });
+      }
+
+      const month = currentDate.getMonth();
+      const firstDay = new Date(year, month, 1).getDay();
+      const lastDate = new Date(year, month + 1, 0).getDate();
+      const calendar = document.getElementById("calendar");
+      const monthEntries = getCurrentMonthEntries();
+
+      document.getElementById("monthTitle").textContent = year + "년 " + (month + 1) + "월";
+      calendar.innerHTML = "";
+
+      for (let i = 0; i < firstDay; i++) {
+        const empty = document.createElement("div");
+        empty.className = "day empty";
+        calendar.appendChild(empty);
+      }
+
+      for (let day = 1; day <= lastDate; day++) {
+        const dayDate = new Date(year, month, day);
+        const key = dateKey(dayDate);
+        const dayEntries = monthEntries.filter(function(entry) {
+          return entry.date === key;
+        });
+        const expenseTotal = dayEntries.reduce(function(sum, entry) {
+          return sum + Number(entry.amount);
+        }, 0);
+
+        const cell = document.createElement("div");
+        const todayClass = key === dateKey(new Date())
+          ? " today" + (dayDate.getDay() === 6 ? " today-sat" : dayDate.getDay() === 0 ? " today-sun" : "")
+          : "";
+        const holidayClass = isKoreanHoliday(key) ? " holiday" : "";
+        cell.className = "day" + (key === dateKey(selectedDate) ? " selected" : "") + todayClass + holidayClass;
+        if (isKoreanHoliday(key)) {
+          cell.title = koreanHolidays[key];
+        }
+        cell.onclick = function() {
+          selectedDate = new Date(dayDate);
+          openDetailModal();
+        };
+        const holidayName = isKoreanHoliday(key) ? koreanHolidays[key] : "";
+        cell.innerHTML = '<div class="date-num">' + day + '</div>' +
+          (holidayName ? '<div class="holiday-name">' + escapeHtml(holidayName) + '</div>' : '') +
+          (expenseTotal > 0 ? '<div class="day-item">' + expenseTotal.toLocaleString("ko-KR") + '</div>' : '');
+        calendar.appendChild(cell);
+      }
+
+      applyCalendarDateFontSize();
+      applyCalendarHolidayFontSize();
+      applySummaryContentFontSize();
+      applyCalendarAmountFontSize();
+      applyCalendarAmountColor();
+      renderSummary();
+    }
+
+    function renderSummary() {
+      const total = getCurrentMonthEntries().reduce(function(sum, entry) {
+        return sum + Number(entry.amount);
+      }, 0);
+      document.getElementById("expenseTotal").textContent = formatMoney(total);
+    }
+
+    function pushOverlayHistory() {
+      if (overlayHistoryActive) return;
+      history.pushState({ budgetOverlay: true }, "", location.href);
+      overlayHistoryActive = true;
+    }
+
+    function isAnyOverlayOpen() {
+      return !document.getElementById("inputModal").classList.contains("hidden") ||
+        !document.getElementById("detailModal").classList.contains("hidden") ||
+        !document.getElementById("summaryModal").classList.contains("hidden") ||
+        !document.getElementById("settingsModal").classList.contains("hidden") ||
+        !document.getElementById("categoryEditModal").classList.contains("hidden") ||
+        !document.getElementById("deleteModal").classList.contains("hidden") ||
+        !document.getElementById("exitModal").classList.contains("hidden");
+    }
+
+    function closeAllOverlays() {
+      document.getElementById("inputModal").classList.add("hidden");
+      document.getElementById("detailModal").classList.add("hidden");
+      document.getElementById("categoryModal").classList.add("hidden");
+      document.getElementById("summaryModal").classList.add("hidden");
+      document.getElementById("settingsModal").classList.add("hidden");
+      document.getElementById("categoryEditModal").classList.add("hidden");
+      document.getElementById("deleteModal").classList.add("hidden");
+      editingCategoryName = null;
+      document.getElementById("exitModal").classList.add("hidden");
+      document.getElementById("textBubbleOverlay").classList.add("hidden");
+      pendingDeleteId = null;
+      document.getElementById("tabInput").classList.remove("active");
+      document.getElementById("tabCategory").classList.remove("active");
+      document.getElementById("tabSummary").classList.remove("active");
+      document.getElementById("tabSettings").classList.remove("active");
+      document.getElementById("tabSettings").classList.remove("active");
+      document.getElementById("tabSettings").classList.remove("active");
+      overlayHistoryActive = false;
+    }
+
+    function openTextBubble(event, text) {
+      event.stopPropagation();
+
+      const overlay = document.getElementById("textBubbleOverlay");
+      const bubble = document.getElementById("textBubble");
+      const targetRect = event.currentTarget.getBoundingClientRect();
+
+      bubble.textContent = text || "-";
+      bubble.classList.remove("below");
+      bubble.style.left = "16px";
+      bubble.style.top = "0px";
+      bubble.style.width = "max-content";
+      bubble.style.maxWidth = "calc(100vw - 32px)";
+      bubble.style.setProperty("--arrow-left", "28px");
+      overlay.classList.remove("hidden");
+
+      const margin = 12;
+      const bubbleRect = bubble.getBoundingClientRect();
+      const bubbleWidth = bubbleRect.width;
+      const bubbleHeight = bubbleRect.height;
+
+      let left = targetRect.left;
+      left = Math.max(margin, Math.min(left, window.innerWidth - bubbleWidth - margin));
+
+      let top = targetRect.top - bubbleHeight - 12;
+
+      if (top < margin) {
+        top = targetRect.bottom + 12;
+        bubble.classList.add("below");
+      }
+
+      if (top + bubbleHeight > window.innerHeight - margin) {
+        top = Math.max(margin, window.innerHeight - bubbleHeight - margin);
+      }
+
+      const targetCenter = targetRect.left + targetRect.width / 2;
+      const arrowLeft = Math.max(18, Math.min(targetCenter - left - 8, bubbleWidth - 30));
+
+      bubble.style.left = left + "px";
+      bubble.style.top = top + "px";
+      bubble.style.setProperty("--arrow-left", arrowLeft + "px");
+    }
+
+    function closeTextBubble() {
+      document.getElementById("textBubbleOverlay").classList.add("hidden");
+    }
+
+    function openDeleteModal(id) {
+      pendingDeleteId = id;
+      pushOverlayHistory();
+      document.getElementById("deleteModal").classList.remove("hidden");
+    }
+
+    function closeDeleteModal() {
+      pendingDeleteId = null;
+      document.getElementById("deleteModal").classList.add("hidden");
+    }
+
+    function confirmDeleteEntry() {
+      if (pendingDeleteId === null) return;
+      const targetId = pendingDeleteId;
+      pendingDeleteId = null;
+      entries = entries.filter(function(entry) { return entry.id !== targetId; });
+      saveData();
+      document.getElementById("deleteModal").classList.add("hidden");
+      renderDailyList();
+      renderCalendar();
+      document.getElementById("detailModal").classList.remove("hidden");
+    }
+
+    function openExitModal() {
+      document.getElementById("exitModal").classList.remove("hidden");
+    }
+
+    function closeExitModal() {
+      document.getElementById("exitModal").classList.add("hidden");
+    }
+
+    function confirmExit() {
+      allowExit = true;
+      window.close();
+      setTimeout(function() {
+        history.go(-2);
+      }, 80);
+    }
+
+    history.replaceState({ budgetHome: true }, "", location.href);
+    history.pushState({ budgetHome: true }, "", location.href);
+
+    window.addEventListener("popstate", function() {
+      if (allowExit) return;
+
+      if (isAnyOverlayOpen() || overlayHistoryActive) {
+        closeAllOverlays();
+        history.pushState({ budgetHome: true }, "", location.href);
+        return;
+      }
+
+      openExitModal();
+      history.pushState({ budgetHome: true }, "", location.href);
+    });
+
+    function openInputModal() {
+      pushOverlayHistory();
+      editingId = null;
+      document.getElementById("inputModalTitle").textContent = "입력";
+      document.getElementById("saveEntryBtn").textContent = "저장하기";
+      document.getElementById("dateInput").value = dateKey(selectedDate);
+      document.getElementById("titleInput").value = "";
+      document.getElementById("amountInput").value = "";
+      let autoSyncInterval = null;
+
+    function setupAutoSync() {
+      if (autoSyncInterval) {
+        clearInterval(autoSyncInterval);
+      }
+
+      autoSyncInterval = setInterval(function() {
+        if (!isRemoteLoading && !isRemoteSaving) {
+          loadAllFromGoogleSheet(true);
+        }
+      }, 5000);
+    }
+
+    renderCategoryOptions();
+      document.getElementById("inputModal").classList.remove("hidden");
+      document.getElementById("detailModal").classList.add("hidden");
+      document.getElementById("categoryModal").classList.add("hidden");
+      document.getElementById("summaryModal").classList.add("hidden");
+      document.getElementById("settingsModal").classList.add("hidden");
+      document.getElementById("tabInput").classList.add("active");
+      document.getElementById("tabCategory").classList.remove("active");
+      document.getElementById("tabSummary").classList.remove("active");
+      document.getElementById("tabSettings").classList.remove("active");
+    }
+
+    function closeInputModal() {
+      document.getElementById("inputModal").classList.add("hidden");
+      document.getElementById("tabInput").classList.remove("active");
+
+      if (returnToDetailAfterEdit) {
+        editingId = null;
+        returnToDetailAfterEdit = false;
+        document.getElementById("inputModalTitle").textContent = "입력";
+        document.getElementById("saveEntryBtn").textContent = "저장하기";
+        openDetailModal();
+        return;
+      }
+
+      editingId = null;
+      returnToDetailAfterEdit = false;
+      document.getElementById("inputModalTitle").textContent = "입력";
+      document.getElementById("saveEntryBtn").textContent = "저장하기";
+    }
+
+    function openDetailModal() {
+      pushOverlayHistory();
+      renderDailyList();
+      document.getElementById("detailModal").classList.remove("hidden");
+      document.getElementById("inputModal").classList.add("hidden");
+      document.getElementById("summaryModal").classList.add("hidden");
+      document.getElementById("settingsModal").classList.add("hidden");
+      document.getElementById("tabInput").classList.remove("active");
+      document.getElementById("tabCategory").classList.remove("active");
+      document.getElementById("tabSummary").classList.remove("active");
+      document.getElementById("tabSettings").classList.remove("active");
+      renderCalendar();
+    }
+
+    function closeDetailModal() {
+      document.getElementById("detailModal").classList.add("hidden");
+    }
+
+    function openInputFromDetail() {
+      closeDetailModal();
+      returnToDetailAfterEdit = true;
+      openInputModal();
+    }
+
+    function showCategoryTab() {
+      pushOverlayHistory();
+      closeInputModal();
+      closeDetailModal();
+      closeSummaryModal();
+      renderCategoryList();
+      document.getElementById("categoryModal").classList.remove("hidden");
+      document.getElementById("tabInput").classList.remove("active");
+      document.getElementById("tabCategory").classList.add("active");
+      document.getElementById("tabSummary").classList.remove("active");
+    }
+
+    function closeCategoryModal() {
+      document.getElementById("categoryModal").classList.add("hidden");
+      document.getElementById("tabCategory").classList.remove("active");
+    }
+
+    function addCategory() {
+      const input = document.getElementById("newCategoryInput");
+      const value = input.value.trim();
+
+      if (!value) {
+        alert("추가할 분류명을 입력해줘.");
+        return;
+      }
+
+      if (expenseCategories.indexOf(value) !== -1) {
+        alert("이미 있는 분류야.");
+        return;
+      }
+
+      expenseCategories.push(value);
+
+      saveCategories();
+      input.value = "";
+      renderCategoryList();
+      let autoSyncInterval = null;
+
+    function setupAutoSync() {
+      if (autoSyncInterval) {
+        clearInterval(autoSyncInterval);
+      }
+
+      autoSyncInterval = setInterval(function() {
+        if (!isRemoteLoading && !isRemoteSaving) {
+          loadAllFromGoogleSheet(true);
+        }
+      }, 5000);
+    }
+
+    renderCategoryOptions();
+      renderSummaryCategoryFilter();
+      if (!document.getElementById("summaryModal").classList.contains("hidden")) {
+        renderSummaryList();
+      }
+    }
+
+    function openCategoryEditModal(category) {
+      editingCategoryName = category;
+      document.getElementById("editCategoryInput").value = category;
+      document.getElementById("categoryEditModal").classList.remove("hidden");
+
+      setTimeout(function() {
+        const input = document.getElementById("editCategoryInput");
+        input.focus();
+        input.select();
+      }, 50);
+    }
+
+    function closeCategoryEditModal() {
+      editingCategoryName = null;
+      document.getElementById("categoryEditModal").classList.add("hidden");
+    }
+
+    function saveEditedCategory() {
+      if (!editingCategoryName) return;
+
+      const input = document.getElementById("editCategoryInput");
+      const newName = input.value.trim();
+      const oldName = editingCategoryName;
+
+      if (!newName) {
+        alert("분류명을 입력해줘.");
+        return;
+      }
+
+      if (newName !== oldName && expenseCategories.indexOf(newName) !== -1) {
+        alert("이미 있는 분류명이야.");
+        return;
+      }
+
+      expenseCategories = expenseCategories.map(function(category) {
+        return category === oldName ? newName : category;
+      });
+
+      entries = entries.map(function(entry) {
+        if (entry.category === oldName) {
+          return Object.assign({}, entry, { category: newName });
+        }
+        return entry;
+      });
+
+      saveCategories();
+      saveData();
+
+      editingCategoryName = null;
+      document.getElementById("categoryEditModal").classList.add("hidden");
+
+      renderCategoryList();
+      let autoSyncInterval = null;
+
+    function setupAutoSync() {
+      if (autoSyncInterval) {
+        clearInterval(autoSyncInterval);
+      }
+
+      autoSyncInterval = setInterval(function() {
+        if (!isRemoteLoading && !isRemoteSaving) {
+          loadAllFromGoogleSheet(true);
+        }
+      }, 5000);
+    }
+
+    renderCategoryOptions();
+      renderSummaryCategoryFilter();
+      renderSummaryList();
+      renderCalendar();
+    }
+
+    function deleteCategory(category) {
+      const used = entries.some(function(entry) {
+        return entry.category === category;
+      });
+
+      const message = used
+        ? "이 분류를 사용한 기존 내역이 있습니다. 그래도 분류 목록에서 삭제할까요? 기존 내역의 분류명은 그대로 남습니다."
+        : "이 분류를 삭제할까요?";
+
+      if (!confirm(message)) return;
+
+      expenseCategories = expenseCategories.filter(function(item) {
+        return item !== category;
+      });
+
+      saveCategories();
+      renderCategoryList();
+      let autoSyncInterval = null;
+
+    function setupAutoSync() {
+      if (autoSyncInterval) {
+        clearInterval(autoSyncInterval);
+      }
+
+      autoSyncInterval = setInterval(function() {
+        if (!isRemoteLoading && !isRemoteSaving) {
+          loadAllFromGoogleSheet(true);
+        }
+      }, 5000);
+    }
+
+    renderCategoryOptions();
+      renderSummaryCategoryFilter();
+    }
+
+    let draggingCategoryIndex = null;
+    let touchDraggingRow = null;
+    let touchDragGhost = null;
+    let touchDragOffsetX = 0;
+    let touchDragOffsetY = 0;
+    let liveDraggingCategory = null;
+
+    function reorderCategory(fromIndex, toIndex) {
+      if (fromIndex === null || toIndex === null) return;
+      if (fromIndex === toIndex) return;
+      if (fromIndex < 0 || toIndex < 0) return;
+      if (fromIndex >= expenseCategories.length || toIndex >= expenseCategories.length) return;
+
+      const moved = expenseCategories.splice(fromIndex, 1)[0];
+      expenseCategories.splice(toIndex, 0, moved);
+
+      saveCategories();
+      let autoSyncInterval = null;
+
+    function setupAutoSync() {
+      if (autoSyncInterval) {
+        clearInterval(autoSyncInterval);
+      }
+
+      autoSyncInterval = setInterval(function() {
+        if (!isRemoteLoading && !isRemoteSaving) {
+          loadAllFromGoogleSheet(true);
+        }
+      }, 5000);
+    }
+
+    renderCategoryOptions();
+      renderSummaryCategoryFilter();
+      if (!document.getElementById("summaryModal").classList.contains("hidden")) {
+        renderSummaryList();
+      }
+    }
+
+    function getCategoryIndexByName(category) {
+      return expenseCategories.indexOf(category);
+    }
+
+    function clearCategoryDropTargets() {
+      document.querySelectorAll("#categoryList .category-row.drop-target").forEach(function(row) {
+        row.classList.remove("drop-target");
+      });
+    }
+
+    function updateCategoryOrderWhileDragging(x, y) {
+      if (!liveDraggingCategory) return;
+
+      const targetRow = getCategoryRowFromPoint(x, y);
+      if (!targetRow) return;
+
+      const targetCategory = targetRow.dataset.category;
+      if (!targetCategory || targetCategory === liveDraggingCategory) return;
+
+      const fromIndex = getCategoryIndexByName(liveDraggingCategory);
+      const toIndex = getCategoryIndexByName(targetCategory);
+
+      if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
+
+      reorderCategory(fromIndex, toIndex);
+      renderCategoryList(liveDraggingCategory);
+
+      const newTarget = document.querySelector('#categoryList .category-row[data-category="' + cssEscapeValue(targetCategory) + '"]');
+      clearCategoryDropTargets();
+      if (newTarget) {
+        newTarget.classList.add("drop-target");
+      }
+    }
+
+    function getCategoryRowFromPoint(x, y) {
+      const element = document.elementFromPoint(x, y);
+      return element ? element.closest(".category-row") : null;
+    }
+
+    function createCategoryDragGhost(row, touch) {
+      removeCategoryDragGhost();
+
+      const rect = row.getBoundingClientRect();
+      touchDragOffsetX = touch.clientX - rect.left;
+      touchDragOffsetY = touch.clientY - rect.top;
+
+      touchDragGhost = row.cloneNode(true);
+      touchDragGhost.classList.remove("dragging");
+      touchDragGhost.classList.add("category-drag-ghost");
+      touchDragGhost.style.width = rect.width + "px";
+
+      touchDragGhost.querySelectorAll("button").forEach(function(button) {
+        button.style.visibility = "hidden";
+      });
+
+      document.body.appendChild(touchDragGhost);
+      moveCategoryDragGhost(touch.clientX, touch.clientY);
+    }
+
+    function moveCategoryDragGhost(x, y) {
+      if (!touchDragGhost) return;
+
+      const left = x - touchDragOffsetX;
+      const top = y - touchDragOffsetY;
+
+      touchDragGhost.style.transform = "translate3d(" + left + "px, " + top + "px, 0) scale(1.03)";
+    }
+
+    function removeCategoryDragGhost() {
+      if (touchDragGhost && touchDragGhost.parentNode) {
+        touchDragGhost.parentNode.removeChild(touchDragGhost);
+      }
+
+      touchDragGhost = null;
+      touchDragOffsetX = 0;
+      touchDragOffsetY = 0;
+    }
+
+    function setupCategoryDrag() {
+      const rows = Array.from(document.querySelectorAll("#categoryList .category-row"));
+
+      rows.forEach(function(row) {
+        row.addEventListener("dragstart", function(event) {
+          draggingCategoryIndex = Number(row.dataset.index);
+          liveDraggingCategory = row.dataset.category;
+          row.classList.add("dragging");
+
+          if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", String(draggingCategoryIndex));
+          }
+        });
+
+        row.addEventListener("dragover", function(event) {
+          event.preventDefault();
+          updateCategoryOrderWhileDragging(event.clientX, event.clientY);
+        });
+
+        row.addEventListener("drop", function(event) {
+          event.preventDefault();
+          clearCategoryDropTargets();
+          saveCategories();
+          renderCategoryList();
+          draggingCategoryIndex = null;
+          liveDraggingCategory = null;
+        });
+
+        row.addEventListener("dragend", function() {
+          clearCategoryDropTargets();
+          renderCategoryList();
+          draggingCategoryIndex = null;
+          liveDraggingCategory = null;
+        });
+
+        row.addEventListener("touchstart", function(event) {
+          if (!event.touches || event.touches.length !== 1) return;
+          if (event.target.closest("button")) return;
+
+          const touch = event.touches[0];
+          draggingCategoryIndex = Number(row.dataset.index);
+          liveDraggingCategory = row.dataset.category;
+          touchDraggingRow = row;
+          row.classList.add("dragging");
+          createCategoryDragGhost(row, touch);
+        }, { passive: true });
+
+        row.addEventListener("touchmove", function(event) {
+          if (draggingCategoryIndex === null) return;
+          if (!event.touches || event.touches.length !== 1) return;
+
+          event.preventDefault();
+
+          const touch = event.touches[0];
+          moveCategoryDragGhost(touch.clientX, touch.clientY);
+          updateCategoryOrderWhileDragging(touch.clientX, touch.clientY);
+        }, { passive: false });
+
+        row.addEventListener("touchcancel", function() {
+          if (touchDraggingRow) {
+            touchDraggingRow.classList.remove("dragging");
+          }
+
+          removeCategoryDragGhost();
+          clearCategoryDropTargets();
+          renderCategoryList();
+          draggingCategoryIndex = null;
+          liveDraggingCategory = null;
+          touchDraggingRow = null;
+        });
+
+        row.addEventListener("touchend", function(event) {
+          if (draggingCategoryIndex === null) return;
+
+          if (touchDraggingRow) {
+            touchDraggingRow.classList.remove("dragging");
+          }
+
+          removeCategoryDragGhost();
+          clearCategoryDropTargets();
+          saveCategories();
+          renderCategoryList();
+
+          draggingCategoryIndex = null;
+          liveDraggingCategory = null;
+          touchDraggingRow = null;
+        });
+      });
+    }
+
+    function cssEscapeValue(value) {
+      if (window.CSS && CSS.escape) {
+        return CSS.escape(value);
+      }
+
+      return String(value).replace(/"/g, '\\"').replace(/'/g, "\\'");
+    }
+
+    function renderCategoryList(activeCategory) {
+      const list = document.getElementById("categoryList");
+
+      if (expenseCategories.length === 0) {
+        list.innerHTML = '<div class="small-note">등록된 분류가 없습니다. 위에서 새 분류를 추가해줘.</div>';
+        return;
+      }
+
+      list.innerHTML = expenseCategories.map(function(category, index) {
+        const draggingClass = activeCategory === category ? " dragging" : "";
+        return '' +
+          '<div class="category-row' + draggingClass + '" draggable="true" data-index="' + index + '" data-category="' + escapeHtml(category) + '">' +
+            '<div class="category-name">' + escapeHtml(category) + '</div>' +
+            '<button class="delete-btn" type="button" onclick="openCategoryEditModal(\'' + escapeJs(category) + '\')">수정</button>' +
+            '<button class="delete-btn" type="button" onclick="deleteCategory(\'' + escapeJs(category) + '\')">삭제</button>' +
+          '</div>';
+      }).join("");
+
+      setupCategoryDrag();
+    }
+
+    function showSettingsTab() {
+      pushOverlayHistory();
+      closeInputModal();
+      closeDetailModal();
+      closeCategoryModal();
+      closeSummaryModal();
+      applyCalendarDateFontSize();
+      applyCalendarHolidayFontSize();
+      applySummaryContentFontSize();
+      applyCalendarAmountFontSize();
+      applyCalendarAmountColor();
+      document.getElementById("settingsModal").classList.remove("hidden");
+      document.getElementById("tabInput").classList.remove("active");
+      document.getElementById("tabCategory").classList.remove("active");
+      document.getElementById("tabSummary").classList.remove("active");
+      document.getElementById("tabSettings").classList.add("active");
+    }
+
+    function closeSettingsModal() {
+      document.getElementById("settingsModal").classList.add("hidden");
+      document.getElementById("tabSettings").classList.remove("active");
+    }
+
+    function showSummaryTab() {
+      pushOverlayHistory();
+      closeInputModal();
+      closeDetailModal();
+      closeCategoryModal();
+      closeSettingsModal();
+      document.getElementById("summaryModalTitle").textContent = "월별 요약 (" + (currentDate.getMonth() + 1) + "월)";
+      renderSummaryCategoryFilter();
+      renderSummaryList();
+      document.getElementById("summaryModal").classList.remove("hidden");
+      document.getElementById("tabInput").classList.remove("active");
+      document.getElementById("tabCategory").classList.remove("active");
+      document.getElementById("tabSummary").classList.add("active");
+      document.getElementById("tabSettings").classList.remove("active");
+    }
+
+    function closeSummaryModal() {
+      document.getElementById("summaryModal").classList.add("hidden");
+      document.getElementById("tabSummary").classList.remove("active");
+    }
+
+    function moveMonth(direction) {
+      currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + direction, 1);
+      selectedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      closeAllOverlays();
+      renderCalendar();
+    }
+
+    function saveEntry() {
+      const selectedDateValue = document.getElementById("dateInput").value;
+      const title = document.getElementById("titleInput").value.trim();
+      const amount = parseAmount(document.getElementById("amountInput").value);
+      const category = document.getElementById("categoryInput").value;
+
+      if (!selectedDateValue) {
+        alert("날짜를 선택해줘.");
+        return;
+      }
+      if (!amount) {
+        alert("금액을 입력해줘.");
+        return;
+      }
+      if (!category) {
+        alert("분류를 먼저 추가하거나 선택해줘.");
+        return;
+      }
+
+      if (editingId !== null) {
+        entries = entries.map(function(entry) {
+          if (entry.id === editingId) {
+            return { id: entry.id, date: selectedDateValue, title: title || "", amount: amount, category: category, type: "expense" };
+          }
+          return entry;
+        });
+      } else {
+        entries.push({ id: Date.now(), date: selectedDateValue, title: title || "", amount: amount, category: category, type: "expense" });
+      }
+
+      selectedDate = new Date(selectedDateValue + "T00:00:00");
+      currentDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+
+      saveData();
+
+      const shouldReturnToDetail = returnToDetailAfterEdit;
+
+      editingId = null;
+      returnToDetailAfterEdit = false;
+
+      document.getElementById("titleInput").value = "";
+      document.getElementById("amountInput").value = "";
+      document.getElementById("inputModal").classList.add("hidden");
+      document.getElementById("tabInput").classList.remove("active");
+      document.getElementById("inputModalTitle").textContent = "입력";
+      document.getElementById("saveEntryBtn").textContent = "저장하기";
+
+      renderCalendar();
+
+      if (shouldReturnToDetail) {
+        openDetailModal();
+      }
+    }
+
+    function openEditEntry(id) {
+      const target = entries.find(function(entry) { return entry.id === id; });
+      if (!target) return;
+      pushOverlayHistory();
+      editingId = id;
+      returnToDetailAfterEdit = true;
+      selectedDate = new Date(target.date + "T00:00:00");
+      currentDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+      document.getElementById("inputModalTitle").textContent = "수정";
+      document.getElementById("saveEntryBtn").textContent = "수정 저장";
+      document.getElementById("dateInput").value = target.date;
+      document.getElementById("titleInput").value = target.title || "";
+      document.getElementById("amountInput").value = Number(target.amount).toLocaleString("ko-KR");
+      let autoSyncInterval = null;
+
+    function setupAutoSync() {
+      if (autoSyncInterval) {
+        clearInterval(autoSyncInterval);
+      }
+
+      autoSyncInterval = setInterval(function() {
+        if (!isRemoteLoading && !isRemoteSaving) {
+          loadAllFromGoogleSheet(true);
+        }
+      }, 5000);
+    }
+
+    renderCategoryOptions();
+      document.getElementById("categoryInput").value = target.category;
+      document.getElementById("detailModal").classList.add("hidden");
+      document.getElementById("categoryModal").classList.add("hidden");
+      document.getElementById("summaryModal").classList.add("hidden");
+      document.getElementById("settingsModal").classList.add("hidden");
+      document.getElementById("inputModal").classList.remove("hidden");
+      document.getElementById("tabInput").classList.add("active");
+      document.getElementById("tabCategory").classList.remove("active");
+      document.getElementById("tabSummary").classList.remove("active");
+      document.getElementById("tabSettings").classList.remove("active");
+    }
+
+    function deleteEntry(id) {
+      openDeleteModal(id);
+    }
+
+    function renderDailyList() {
+      const title = document.getElementById("detailDateTitle");
+      const list = document.getElementById("dailyList");
+      const key = dateKey(selectedDate);
+      const dayEntries = entries.filter(function(entry) { return entry.date === key; });
+      title.textContent = (selectedDate.getMonth() + 1) + "월 " + selectedDate.getDate() + "일 내역";
+      if (dayEntries.length === 0) {
+        list.innerHTML = '<div class="small-note">이 날짜에 입력된 내역이 없습니다.</div>';
+        return;
+      }
+      list.innerHTML = dayEntries.map(function(entry) {
+        return '' +
+          '<div class="entry">' +
+            '<div class="entry-main">' +
+              '<div class="entry-title" onclick="openTextBubble(event, \'' + escapeJs(entry.title || "-") + '\')">' + escapeHtml(entry.title || "-") + '</div>' +
+              '<div class="entry-category">' + escapeHtml(entry.category) + '</div>' +
+            '</div>' +
+            '<div class="entry-amount">' + formatMoney(entry.amount) + '</div>' +
+            '<button class="delete-btn" type="button" onclick="openEditEntry(' + Number(entry.id) + ')">수정</button>' +
+            '<button class="delete-btn" type="button" onclick="deleteEntry(' + Number(entry.id) + ')">삭제</button>' +
+          '</div>';
+      }).join("");
+    }
+
+    function renderSummaryCategoryFilter() {
+      const filter = document.getElementById("summaryCategoryFilter");
+      const currentValue = filter.value || "all";
+
+      const usedCategories = Array.from(new Set(getCurrentMonthEntries().map(function(entry) {
+        return entry.category;
+      }).filter(Boolean)));
+
+      const orderedCategories = expenseCategories.slice();
+
+      usedCategories.forEach(function(category) {
+        if (orderedCategories.indexOf(category) === -1) {
+          orderedCategories.push(category);
+        }
+      });
+
+      filter.innerHTML = '<option value="all">전체</option>' + orderedCategories.map(function(category) {
+        return '<option value="' + escapeHtml(category) + '">' + escapeHtml(category) + '</option>';
+      }).join("");
+
+      filter.value = currentValue !== "all" && orderedCategories.indexOf(currentValue) !== -1 ? currentValue : "all";
+    }
+
+    function renderSummaryList() {
+      const summaryList = document.getElementById("summaryList");
+      const filter = document.getElementById("summaryCategoryFilter");
+      const selectedCategory = filter ? filter.value : "all";
+      const expenseEntries = getCurrentMonthEntries()
+        .filter(function(entry) { return selectedCategory === "all" || entry.category === selectedCategory; })
+        .sort(function(a, b) { return a.date.localeCompare(b.date); });
+      if (expenseEntries.length === 0) {
+        summaryList.innerHTML = '<div class="small-note">선택한 분류의 지출 내역이 없습니다.</div>';
+        return;
+      }
+      const rows = expenseEntries.map(function(entry) {
+        const normalizedDate = normalizeRemoteDateValue(entry.date);
+        const day = normalizedDate ? Number(normalizedDate.split("-")[2]) : "-";
+        return '<tr><td>' + day + '일</td><td>' + escapeHtml(entry.category) + '</td><td class="summary-item" onclick="openTextBubble(event, \'' + escapeJs(entry.title || "-") + '\')">' + escapeHtml(entry.title || "-") + '</td><td class="summary-amount">' + formatMoney(entry.amount) + '</td></tr>';
+      }).join("");
+      summaryList.innerHTML = '<table class="summary-table"><thead><tr><th>날짜</th><th>분류</th><th>항목</th><th>금액</th></tr></thead><tbody>' + rows + '</tbody></table>';
+      applySummaryContentFontSize();
+    }
+
+    function setupCalendarSwipe() {
+      const calendarWrap = document.getElementById("calendarWrap");
+      let startX = 0;
+      let startY = 0;
+      calendarWrap.addEventListener("touchstart", function(event) {
+        if (!event.touches || event.touches.length !== 1) return;
+        startX = event.touches[0].clientX;
+        startY = event.touches[0].clientY;
+      }, { passive: true });
+      calendarWrap.addEventListener("touchend", function(event) {
+        if (!event.changedTouches || event.changedTouches.length !== 1) return;
+        const diffX = event.changedTouches[0].clientX - startX;
+        const diffY = event.changedTouches[0].clientY - startY;
+        if (Math.abs(diffX) < 55) return;
+        if (Math.abs(diffX) < Math.abs(diffY) * 1.4) return;
+        moveMonth(diffX < 0 ? 1 : -1);
+      }, { passive: true });
+    }
+
+    function escapeJs(value) {
+      return String(value)
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/"/g, "&quot;")
+        .replace(/\n/g, "\\n")
+        .replace(/\r/g, "");
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    let autoSyncInterval = null;
+
+    function setupAutoSync() {
+      if (autoSyncInterval) {
+        clearInterval(autoSyncInterval);
+      }
+
+      autoSyncInterval = setInterval(function() {
+        if (!isRemoteLoading && !isRemoteSaving) {
+          loadAllFromGoogleSheet(true);
+        }
+      }, 5000);
+    }
+
+    renderCategoryOptions();
+    applyCalendarDateFontSize();
+    applyCalendarHolidayFontSize();
+    applySummaryContentFontSize();
+    applyCalendarAmountFontSize();
+    applyCalendarAmountColor();
+    selectedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
+    setupCalendarSwipe();
+    renderCalendar();
+
+    loadAllFromGoogleSheet(true);
+    setupAutoSync();
+
+    document.addEventListener("visibilitychange", function() {
+      if (!document.hidden) {
+        loadAllFromGoogleSheet(true);
+      }
+    });
+  </script>
+</body>
+</html>
