@@ -1126,12 +1126,10 @@
       { name: "검정", value: "#111827" }
     ];
 
-    const googleSheetApiUrl = "https://script.google.com/macros/s/AKfycbx7cOH7eR4N4RyXY4x34N6LGTEXHCJFJftgNTX5FLQEokvGS-5LqCR7xw3PsKDeEpu5qA/exec";
+    const googleSheetApiUrl = "https://script.google.com/macros/s/AKfycbypwVVX__sSeTRvuLbeH6e-Yg_1TD1F7AcdqgjFCogzYRvP9LTXjr3-mweZiGHqvi4pog/exec";
     let isRemoteLoading = false;
     let isRemoteSaving = false;
     let remoteSaveTimer = null;
-    let lastSaveTime = 0;
-    let pendingRemoteReload = false;
 
     let editingId = null;
     let editingCategoryName = null;
@@ -1379,10 +1377,8 @@
       if (isRemoteLoading) return;
 
       clearTimeout(remoteSaveTimer);
-
       remoteSaveTimer = setTimeout(function() {
         isRemoteSaving = true;
-        lastSaveTime = Date.now();
 
         fetch(googleSheetApiUrl, {
           method: "POST",
@@ -1393,16 +1389,12 @@
           body: JSON.stringify({
             action: "saveAll",
             entries: entries,
-            categories: expenseCategories,
-            syncTime: Date.now()
+            categories: expenseCategories
           })
-        });
-
-        setTimeout(function() {
+        }).finally(function() {
           isRemoteSaving = false;
-          loadAllFromGoogleSheet(true);
-        }, 1500);
-      }, 200);
+        });
+      }, 250);
     }
 
     function normalizeRemoteDateValue(value) {
@@ -1450,104 +1442,171 @@
       return "";
     }
 
-    function refreshOpenViewsAfterSync() {
-      renderCategoryOptions();
-      renderCalendar();
-
-      if (!document.getElementById("detailModal").classList.contains("hidden")) {
-        renderDailyList();
-      }
-
-      if (!document.getElementById("summaryModal").classList.contains("hidden")) {
-        renderSummaryCategoryFilter();
-        renderSummaryList();
-
-        const summaryTitle = document.getElementById("summaryModalTitle");
-        if (summaryTitle) {
-          summaryTitle.textContent = "월별 요약 (" + (currentDate.getMonth() + 1) + "월)";
-        }
-      }
-
-      if (!document.getElementById("categoryModal").classList.contains("hidden")) {
-        renderCategoryList();
-      }
-    }
-
-    function loadAllFromGoogleSheet(force) {
-      if (!force && isRemoteSaving) {
-        return;
-      }
-
-      if (isRemoteLoading) {
-        return;
-      }
-
+    function loadAllFromGoogleSheet() {
       isRemoteLoading = true;
 
-      const callbackName = "calendarBudgetSyncCallback_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
-      const script = document.createElement("script");
-
-      window[callbackName] = function(data) {
-        try {
+      fetch(googleSheetApiUrl + "?mode=all&t=" + Date.now())
+        .then(function(response) {
+          return response.json();
+        })
+        .then(function(data) {
           const remoteEntries = Array.isArray(data.entries) ? data.entries : [];
           const remoteCategories = Array.isArray(data.categories) ? data.categories : [];
 
-          entries = remoteEntries.map(function(entry) {
-            return {
-              id: Number(entry.id) || Date.now() + Math.floor(Math.random() * 100000),
-              date: normalizeRemoteDateValue(entry.date),
-              category: String(entry.category || ""),
-              title: String(entry.title || ""),
-              amount: Number(entry.amount) || 0,
-              type: entry.type || "expense"
-            };
-          }).filter(function(entry) {
-            return entry.date;
+          if (remoteEntries.length > 0) {
+            entries = remoteEntries.map(function(entry) {
+              return {
+                id: Number(entry.id) || Date.now() + Math.floor(Math.random() * 100000),
+                date: normalizeRemoteDateValue(entry.date),
+                category: String(entry.category || ""),
+                title: String(entry.title || ""),
+                amount: Number(entry.amount) || 0,
+                type: entry.type || "expense"
+              };
+            }).filter(function(entry) {
+              return entry.date && entry.amount;
+            });
+
+            localStorage.setItem("calendarBudgetEntries", JSON.stringify(entries));
+          }
+
+          if (remoteCategories.length > 0) {
+            expenseCategories = remoteCategories.map(function(category) {
+              return String(category).trim();
+            }).filter(Boolean);
+
+            localStorage.setItem("calendarBudgetCategories", JSON.stringify(expenseCategories));
+          }
+
+          if (remoteEntries.length === 0 && entries.length > 0) {
+            saveAllToGoogleSheet();
+          }
+
+          if (remoteCategories.length === 0 && expenseCategories.length > 0) {
+            saveAllToGoogleSheet();
+          }
+
+          renderCategoryOptions();
+          renderCalendar();
+
+          if (!document.getElementById("summaryModal").classList.contains("hidden")) {
+            renderSummaryCategoryFilter();
+            renderSummaryList();
+          }
+
+          if (!document.getElementById("categoryModal").classList.contains("hidden")) {
+            renderCategoryList();
+          }
+        })
+        .catch(function() {
+          renderCategoryOptions();
+          renderCalendar();
+        })
+        .finally(function() {
+          isRemoteLoading = false;
+        });
+    }
+
+    function formatMoney(value) {
+      return Number(value || 0).toLocaleString("ko-KR") + "원";
+    }
+
+    function dateKey(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      return y + "-" + m + "-" + d;
+    }
+
+    function getMonthKey(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      return y + "-" + m;
+    }
+
+    function formatAmountInput(input) {
+      const raw = input.value.replace(/[^0-9]/g, "");
+      input.value = raw ? Number(raw).toLocaleString("ko-KR") : "";
+    }
+
+    function parseAmount(value) {
+      return Number(String(value).replace(/[^0-9]/g, "")) || 0;
+    }
+
+    function renderCategoryOptions() {
+      const select = document.getElementById("categoryInput");
+
+      if (expenseCategories.length === 0) {
+        select.innerHTML = '<option value="">분류 없음</option>';
+        return;
+      }
+
+      select.innerHTML = expenseCategories.map(function(category) {
+        return '<option value="' + escapeHtml(category) + '">' + escapeHtml(category) + '</option>';
+      }).join("");
+    }
+
+    function isKoreanHoliday(key) {
+      return Object.prototype.hasOwnProperty.call(koreanHolidays, key);
+    }
+
+    function normalizeHolidayItems(items) {
+      if (!items) return [];
+
+      if (Array.isArray(items)) return items;
+
+      if (Array.isArray(items.item)) return items.item;
+
+      if (items.item) return [items.item];
+
+      return [];
+    }
+
+    function loadKoreanHolidays(year) {
+      if (loadedHolidayYears[year] || loadingHolidayYears[year]) {
+        return Promise.resolve();
+      }
+
+      loadingHolidayYears[year] = true;
+
+      const url = holidayApiUrl +
+        "?ServiceKey=" + encodeURIComponent(holidayApiServiceKey) +
+        "&solYear=" + encodeURIComponent(year) +
+        "&numOfRows=100" +
+        "&_type=json";
+
+      return fetch(url)
+        .then(function(response) {
+          if (!response.ok) {
+            throw new Error("holiday api error");
+          }
+          return response.json();
+        })
+        .then(function(data) {
+          const body = data &&
+            data.response &&
+            data.response.body;
+
+          const items = normalizeHolidayItems(body && body.items);
+
+          items.forEach(function(item) {
+            if (!item || !item.locdate) return;
+
+            const raw = String(item.locdate);
+            if (raw.length !== 8) return;
+
+            const key = raw.slice(0, 4) + "-" + raw.slice(4, 6) + "-" + raw.slice(6, 8);
+            koreanHolidays[key] = item.dateName || "공휴일";
           });
 
-          expenseCategories = remoteCategories.map(function(category) {
-            return String(category).trim();
-          }).filter(Boolean);
-
-          if (expenseCategories.length === 0) {
-            expenseCategories = defaultExpenseCategories.slice();
-          }
-
-          localStorage.setItem("calendarBudgetEntries", JSON.stringify(entries));
-          localStorage.setItem("calendarBudgetCategories", JSON.stringify(expenseCategories));
-
-          refreshOpenViewsAfterSync();
-        } finally {
-          isRemoteLoading = false;
-
-          if (script.parentNode) {
-            script.parentNode.removeChild(script);
-          }
-
-          try {
-            delete window[callbackName];
-          } catch (error) {
-            window[callbackName] = undefined;
-          }
-        }
-      };
-
-      script.onerror = function() {
-        isRemoteLoading = false;
-
-        if (script.parentNode) {
-          script.parentNode.removeChild(script);
-        }
-
-        try {
-          delete window[callbackName];
-        } catch (error) {
-          window[callbackName] = undefined;
-        }
-      };
-
-      script.src = googleSheetApiUrl + "?mode=all&callback=" + encodeURIComponent(callbackName) + "&t=" + Date.now();
-      document.body.appendChild(script);
+          loadedHolidayYears[year] = true;
+        })
+        .catch(function() {
+          loadedHolidayYears[year] = true;
+        })
+        .finally(function() {
+          loadingHolidayYears[year] = false;
+        });
     }
 
     function getCurrentMonthEntries() {
@@ -2411,20 +2470,6 @@
         .replace(/'/g, "&#039;");
     }
 
-    let autoSyncInterval = null;
-
-    function setupAutoSync() {
-      if (autoSyncInterval) {
-        clearInterval(autoSyncInterval);
-      }
-
-      autoSyncInterval = setInterval(function() {
-        if (!isRemoteLoading && !isRemoteSaving) {
-          loadAllFromGoogleSheet(true);
-        }
-      }, 5000);
-    }
-
     renderCategoryOptions();
     applyCalendarDateFontSize();
     applyCalendarHolidayFontSize();
@@ -2434,15 +2479,7 @@
     selectedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
     setupCalendarSwipe();
     renderCalendar();
-
-    loadAllFromGoogleSheet(true);
-    setupAutoSync();
-
-    document.addEventListener("visibilitychange", function() {
-      if (!document.hidden) {
-        loadAllFromGoogleSheet(true);
-      }
-    });
+    loadAllFromGoogleSheet();
   </script>
 </body>
 </html>
