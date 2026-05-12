@@ -1451,21 +1451,7 @@
     }
 
     function refreshOpenViewsAfterSync() {
-      let autoSyncInterval = null;
-
-    function setupAutoSync() {
-      if (autoSyncInterval) {
-        clearInterval(autoSyncInterval);
-      }
-
-      autoSyncInterval = setInterval(function() {
-        if (!isRemoteLoading && !isRemoteSaving) {
-          loadAllFromGoogleSheet(true);
-        }
-      }, 5000);
-    }
-
-    renderCategoryOptions();
+      renderCategoryOptions();
       renderCalendar();
 
       if (!document.getElementById("detailModal").classList.contains("hidden")) {
@@ -1787,21 +1773,7 @@
       document.getElementById("dateInput").value = dateKey(selectedDate);
       document.getElementById("titleInput").value = "";
       document.getElementById("amountInput").value = "";
-      let autoSyncInterval = null;
-
-    function setupAutoSync() {
-      if (autoSyncInterval) {
-        clearInterval(autoSyncInterval);
-      }
-
-      autoSyncInterval = setInterval(function() {
-        if (!isRemoteLoading && !isRemoteSaving) {
-          loadAllFromGoogleSheet(true);
-        }
-      }, 5000);
-    }
-
-    renderCategoryOptions();
+      renderCategoryOptions();
       document.getElementById("inputModal").classList.remove("hidden");
       document.getElementById("detailModal").classList.add("hidden");
       document.getElementById("categoryModal").classList.add("hidden");
@@ -1892,21 +1864,7 @@
       saveCategories();
       input.value = "";
       renderCategoryList();
-      let autoSyncInterval = null;
-
-    function setupAutoSync() {
-      if (autoSyncInterval) {
-        clearInterval(autoSyncInterval);
-      }
-
-      autoSyncInterval = setInterval(function() {
-        if (!isRemoteLoading && !isRemoteSaving) {
-          loadAllFromGoogleSheet(true);
-        }
-      }, 5000);
-    }
-
-    renderCategoryOptions();
+      renderCategoryOptions();
       renderSummaryCategoryFilter();
       if (!document.getElementById("summaryModal").classList.contains("hidden")) {
         renderSummaryList();
@@ -1965,21 +1923,7 @@
       document.getElementById("categoryEditModal").classList.add("hidden");
 
       renderCategoryList();
-      let autoSyncInterval = null;
-
-    function setupAutoSync() {
-      if (autoSyncInterval) {
-        clearInterval(autoSyncInterval);
-      }
-
-      autoSyncInterval = setInterval(function() {
-        if (!isRemoteLoading && !isRemoteSaving) {
-          loadAllFromGoogleSheet(true);
-        }
-      }, 5000);
-    }
-
-    renderCategoryOptions();
+      renderCategoryOptions();
       renderSummaryCategoryFilter();
       renderSummaryList();
       renderCalendar();
@@ -2002,21 +1946,7 @@
 
       saveCategories();
       renderCategoryList();
-      let autoSyncInterval = null;
-
-    function setupAutoSync() {
-      if (autoSyncInterval) {
-        clearInterval(autoSyncInterval);
-      }
-
-      autoSyncInterval = setInterval(function() {
-        if (!isRemoteLoading && !isRemoteSaving) {
-          loadAllFromGoogleSheet(true);
-        }
-      }, 5000);
-    }
-
-    renderCategoryOptions();
+      renderCategoryOptions();
       renderSummaryCategoryFilter();
     }
 
@@ -2037,21 +1967,7 @@
       expenseCategories.splice(toIndex, 0, moved);
 
       saveCategories();
-      let autoSyncInterval = null;
-
-    function setupAutoSync() {
-      if (autoSyncInterval) {
-        clearInterval(autoSyncInterval);
-      }
-
-      autoSyncInterval = setInterval(function() {
-        if (!isRemoteLoading && !isRemoteSaving) {
-          loadAllFromGoogleSheet(true);
-        }
-      }, 5000);
-    }
-
-    renderCategoryOptions();
+      renderCategoryOptions();
       renderSummaryCategoryFilter();
       if (!document.getElementById("summaryModal").classList.contains("hidden")) {
         renderSummaryList();
@@ -2374,21 +2290,7 @@
       document.getElementById("dateInput").value = target.date;
       document.getElementById("titleInput").value = target.title || "";
       document.getElementById("amountInput").value = Number(target.amount).toLocaleString("ko-KR");
-      let autoSyncInterval = null;
-
-    function setupAutoSync() {
-      if (autoSyncInterval) {
-        clearInterval(autoSyncInterval);
-      }
-
-      autoSyncInterval = setInterval(function() {
-        if (!isRemoteLoading && !isRemoteSaving) {
-          loadAllFromGoogleSheet(true);
-        }
-      }, 5000);
-    }
-
-    renderCategoryOptions();
+      renderCategoryOptions();
       document.getElementById("categoryInput").value = target.category;
       document.getElementById("detailModal").classList.add("hidden");
       document.getElementById("categoryModal").classList.add("hidden");
