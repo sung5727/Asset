@@ -1126,12 +1126,11 @@
       { name: "검정", value: "#111827" }
     ];
 
-    const googleSheetApiUrl = "https://script.google.com/macros/s/AKfycbx7cOH7eR4N4RyXY4x34N6LGTEXHCJFJftgNTX5FLQEokvGS-5LqCR7xw3PsKDeEpu5qA/exec";
+    const googleSheetApiUrl = "https://script.google.com/macros/s/AKfycbyDNyBpLVmtRnrDZNIBAlP1ZzGgorSKY2h_QTw3sqxtvfSkW9JPrEp8yxDdSDrsdn2DEQ/exec";
     let isRemoteLoading = false;
     let isRemoteSaving = false;
     let remoteSaveTimer = null;
-    let autoSyncTimer = null;
-    let lastLocalChangeTime = 0;
+    let syncBlockUntil = 0;
 
     let editingId = null;
     let editingCategoryName = null;
@@ -1141,15 +1140,57 @@
     let allowExit = false;
 
     function loadEntries() {
-      return [];
+      try {
+        const saved = localStorage.getItem("calendarBudgetEntries");
+        return saved ? JSON.parse(saved) : [];
+      } catch (error) {
+        return [];
+      }
     }
 
     function loadCategories() {
-      return defaultExpenseCategories.slice();
+      try {
+        const saved = localStorage.getItem("calendarBudgetCategories");
+        const parsed = saved ? JSON.parse(saved) : null;
+
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map(function(category) {
+            return String(category).trim();
+          }).filter(Boolean);
+        }
+
+        return defaultExpenseCategories.slice();
+      } catch (error) {
+        return defaultExpenseCategories.slice();
+      }
+    }
+
+    function postToGoogleSheet(payload) {
+      isRemoteSaving = true;
+      syncBlockUntil = Date.now() + 7000;
+
+      fetch(googleSheetApiUrl, {
+        method: "POST",
+        mode: "no-cors",
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      setTimeout(function() {
+        isRemoteSaving = false;
+        syncBlockUntil = 0;
+        loadAllFromGoogleSheet(true);
+      }, 3500);
     }
 
     function saveCategories() {
-      saveAllToGoogleSheet();
+      postToGoogleSheet({
+        action: "saveCategories",
+        categories: expenseCategories,
+        syncTime: Date.now()
+      });
     }
 
     function loadCalendarDateFontSize() {
@@ -1352,36 +1393,8 @@
     }
 
     function saveData() {
-      saveAllToGoogleSheet();
-    }
-
-    function saveAllToGoogleSheet() {
-      if (isRemoteLoading) return;
-
-      lastLocalChangeTime = Date.now();
-
-      clearTimeout(remoteSaveTimer);
-      remoteSaveTimer = setTimeout(function() {
-        isRemoteSaving = true;
-
-        fetch(googleSheetApiUrl, {
-          method: "POST",
-          mode: "no-cors",
-          headers: {
-            "Content-Type": "text/plain;charset=utf-8"
-          },
-          body: JSON.stringify({
-            action: "saveAll",
-            entries: entries,
-            categories: expenseCategories
-          })
-        }).finally(function() {
-          isRemoteSaving = false;
-          setTimeout(function() {
-            loadAllFromGoogleSheet(true);
-          }, 800);
-        });
-      }, 250);
+      // 개별 처리 방식에서는 전체 entries를 덮어쓰지 않는다.
+      // 기존 코드 호환용으로만 둔다.
     }
 
     function normalizeRemoteDateValue(value) {
@@ -1405,25 +1418,23 @@
           return dateMatch[1] + "-" + String(dateMatch[2]).padStart(2, "0") + "-" + String(dateMatch[3]).padStart(2, "0");
         }
 
-        const parsed = new Date(trimmed);
-        if (!isNaN(parsed.getTime())) {
-          return dateKey(parsed);
-        }
-
         return "";
       }
 
       if (typeof value === "number") {
         const base = new Date(Date.UTC(1899, 11, 30));
         const converted = new Date(base.getTime() + value * 24 * 60 * 60 * 1000);
-        if (!isNaN(converted.getTime())) {
-          return dateKey(converted);
-        }
+        const y = converted.getUTCFullYear();
+        const m = String(converted.getUTCMonth() + 1).padStart(2, "0");
+        const d = String(converted.getUTCDate()).padStart(2, "0");
+        return y + "-" + m + "-" + d;
       }
 
-      const parsed = new Date(value);
-      if (!isNaN(parsed.getTime())) {
-        return dateKey(parsed);
+      if (Object.prototype.toString.call(value) === "[object Date]" && !isNaN(value.getTime())) {
+        const y = value.getFullYear();
+        const m = String(value.getMonth() + 1).padStart(2, "0");
+        const d = String(value.getDate()).padStart(2, "0");
+        return y + "-" + m + "-" + d;
       }
 
       return "";
@@ -1431,15 +1442,31 @@
 
     function loadAllFromGoogleSheet(force) {
       if (isRemoteLoading) return;
-      if (!force && isRemoteSaving) return;
 
+      if (!force && Date.now() < syncBlockUntil) {
+        return;
+      }
+
+      if (!force && isRemoteSaving) {
+        return;
+      }
+
+      const requestStartedAt = Date.now();
       isRemoteLoading = true;
 
-      const callbackName = "calendarBudgetCallback_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
-      const script = document.createElement("script");
+      fetch(googleSheetApiUrl + "?mode=all&t=" + Date.now())
+        .then(function(response) {
+          return response.json();
+        })
+        .then(function(data) {
+          if (requestStartedAt < syncBlockUntil) {
+            return;
+          }
 
-      window[callbackName] = function(data) {
-        try {
+          if (isRemoteSaving && !force) {
+            return;
+          }
+
           const remoteEntries = Array.isArray(data.entries) ? data.entries : [];
           const remoteCategories = Array.isArray(data.categories) ? data.categories : [];
 
@@ -1464,60 +1491,29 @@
             expenseCategories = defaultExpenseCategories.slice();
           }
 
-          refreshAfterRemoteSync();
-        } finally {
+          renderCategoryOptions();
+          renderCalendar();
+
+          if (!document.getElementById("detailModal").classList.contains("hidden")) {
+            renderDailyList();
+          }
+
+          if (!document.getElementById("summaryModal").classList.contains("hidden")) {
+            renderSummaryCategoryFilter();
+            renderSummaryList();
+          }
+
+          if (!document.getElementById("categoryModal").classList.contains("hidden")) {
+            renderCategoryList();
+          }
+        })
+        .catch(function() {
+          renderCategoryOptions();
+          renderCalendar();
+        })
+        .finally(function() {
           isRemoteLoading = false;
-
-          if (script.parentNode) {
-            script.parentNode.removeChild(script);
-          }
-
-          try {
-            delete window[callbackName];
-          } catch (error) {
-            window[callbackName] = undefined;
-          }
-        }
-      };
-
-      script.onerror = function() {
-        isRemoteLoading = false;
-
-        if (script.parentNode) {
-          script.parentNode.removeChild(script);
-        }
-
-        try {
-          delete window[callbackName];
-        } catch (error) {
-          window[callbackName] = undefined;
-        }
-      };
-
-      script.src = googleSheetApiUrl + "?mode=all&callback=" + encodeURIComponent(callbackName) + "&t=" + Date.now();
-      document.body.appendChild(script);
-    }
-
-    function refreshAfterRemoteSync() {
-      renderCategoryOptions();
-      renderCalendar();
-
-      if (!document.getElementById("detailModal").classList.contains("hidden")) {
-        renderDailyList();
-      }
-
-      if (!document.getElementById("summaryModal").classList.contains("hidden")) {
-        const title = document.getElementById("summaryModalTitle");
-        if (title) {
-          title.textContent = "월별 요약 (" + (currentDate.getMonth() + 1) + "월)";
-        }
-        renderSummaryCategoryFilter();
-        renderSummaryList();
-      }
-
-      if (!document.getElementById("categoryModal").classList.contains("hidden")) {
-        renderCategoryList();
-      }
+        });
     }
 
     function formatMoney(value) {
@@ -1795,10 +1791,20 @@
 
     function confirmDeleteEntry() {
       if (pendingDeleteId === null) return;
+
       const targetId = pendingDeleteId;
       pendingDeleteId = null;
-      entries = entries.filter(function(entry) { return entry.id !== targetId; });
-      saveData();
+
+      entries = entries.filter(function(entry) {
+        return Number(entry.id) !== Number(targetId);
+      });
+
+      postToGoogleSheet({
+        action: "deleteEntry",
+        id: targetId,
+        syncTime: Date.now()
+      });
+
       document.getElementById("deleteModal").classList.add("hidden");
       renderDailyList();
       renderCalendar();
@@ -1988,8 +1994,13 @@
         return entry;
       });
 
-      saveCategories();
-      saveData();
+      postToGoogleSheet({
+        action: "renameCategory",
+        oldName: oldName,
+        newName: newName,
+        categories: expenseCategories,
+        syncTime: Date.now()
+      });
 
       editingCategoryName = null;
       document.getElementById("categoryEditModal").classList.add("hidden");
@@ -2314,21 +2325,52 @@
         return;
       }
 
+      let savedEntry = null;
+
       if (editingId !== null) {
         entries = entries.map(function(entry) {
-          if (entry.id === editingId) {
-            return { id: entry.id, date: selectedDateValue, title: title || "", amount: amount, category: category, type: "expense" };
+          if (Number(entry.id) === Number(editingId)) {
+            savedEntry = {
+              id: entry.id,
+              date: selectedDateValue,
+              title: title || "",
+              amount: amount,
+              category: category,
+              type: "expense"
+            };
+            return savedEntry;
           }
           return entry;
         });
+
+        if (savedEntry) {
+          postToGoogleSheet({
+            action: "updateEntry",
+            entry: savedEntry,
+            syncTime: Date.now()
+          });
+        }
       } else {
-        entries.push({ id: Date.now(), date: selectedDateValue, title: title || "", amount: amount, category: category, type: "expense" });
+        savedEntry = {
+          id: Date.now(),
+          date: selectedDateValue,
+          title: title || "",
+          amount: amount,
+          category: category,
+          type: "expense"
+        };
+
+        entries.push(savedEntry);
+
+        postToGoogleSheet({
+          action: "addEntry",
+          entry: savedEntry,
+          syncTime: Date.now()
+        });
       }
 
       selectedDate = new Date(selectedDateValue + "T00:00:00");
       currentDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
-
-      saveData();
 
       const shouldReturnToDetail = returnToDetailAfterEdit;
 
@@ -2483,18 +2525,6 @@
         .replace(/'/g, "&#039;");
     }
 
-    function setupAutoSync() {
-      if (autoSyncTimer) {
-        clearInterval(autoSyncTimer);
-      }
-
-      autoSyncTimer = setInterval(function() {
-        if (!isRemoteLoading && !isRemoteSaving) {
-          loadAllFromGoogleSheet(true);
-        }
-      }, 5000);
-    }
-
     renderCategoryOptions();
     applyCalendarDateFontSize();
     applyCalendarHolidayFontSize();
@@ -2505,13 +2535,6 @@
     setupCalendarSwipe();
     renderCalendar();
     loadAllFromGoogleSheet(true);
-    setupAutoSync();
-
-    document.addEventListener("visibilitychange", function() {
-      if (!document.hidden) {
-        loadAllFromGoogleSheet(true);
-      }
-    });
   </script>
 </body>
 </html>
